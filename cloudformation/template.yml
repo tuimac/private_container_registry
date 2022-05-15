@@ -406,10 +406,11 @@ Resources:
                           cd /home/ec2-user
                           git clone https://github.com/tuimac/private_container_registry; echo "cloned"
                           chown ec2-user:ec2-user -R /home/ec2-user/private_container_registry
+                          mkdir -p /etc/containers/certs.d
                           echo ${EFS_DOMAIN}':/ /etc/containers/certs.d nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport,_netdev,nofail 0 0' >> /etc/fstab
                           mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport ${EFS_DOMAIN}:/ /etc/containers/certs.d
                           cd private_container_registry/registry 
-                          sudo -u ec2-user -i './run.sh create'
+                          sudo -u ec2-user -i 'bash run.sh create'
                           reboot
                     - {
                         SERVERIP: !Ref RegistryIP,
@@ -439,10 +440,11 @@ Resources:
                           cd /home/ec2-user
                           git clone https://github.com/tuimac/private_container_registry; echo "cloned"
                           chown ec2-user:ec2-user -R /home/ec2-user/private_container_registry
+                          mkdir -p /etc/docker/certs.d
                           echo ${EFS_DOMAIN}':/ /etc/docker/certs.d nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport,_netdev,nofail 0 0' >> /etc/fstab
                           mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport ${EFS_DOMAIN}:/ /etc/docker/certs.d
                           cd private_container_registry/registry 
-                          sudo -u ec2-user -i './run.sh create'
+                          sudo -u ec2-user -i 'bash run.sh create'
                           reboot
                     - {
                         SERVERIP: !Ref RegistryIP,
