@@ -420,6 +420,8 @@ Resources:
                         REGISTRY_DOMAIN: !Ref RegistryDomain,
                         CLIENT_DOMAIN: !Ref ClientDomain,
                         EFS_DOMAIN: !Ref EfsDomain,
+                        REGION: !Ref 'AWS::Region',
+                        BUCKET_NAME: !Ref S3BucketName,
                       }
                   - !Sub
                     - |
@@ -451,6 +453,8 @@ Resources:
                         REGISTRY_DOMAIN: !Ref RegistryDomain,
                         CLIENT_DOMAIN: !Ref ClientDomain,
                         EFS_DOMAIN: !Ref EfsDomain,
+                        REGION: !Ref 'AWS::Region',
+                        BUCKET_NAME: !Ref S3BucketName,
                       }
 
   ClientServer:
@@ -532,6 +536,8 @@ Resources:
                         REGISTRY_DOMAIN: !Ref RegistryDomain,
                         CLIENT_DOMAIN: !Ref ClientDomain,
                         EFS_DOMAIN: !Ref EfsDomain,
+                        REGION: !Ref 'AWS::Region',
+                        BUCKET_NAME: !Ref S3BucketName,
                       }
                   - !Sub
                     - |
@@ -562,4 +568,6 @@ Resources:
                         REGISTRY_DOMAIN: !Ref RegistryDomain,
                         CLIENT_DOMAIN: !Ref ClientDomain,
                         EFS_DOMAIN: !Ref EfsDomain,
+                        REGION: !Ref 'AWS::Region',
+                        BUCKET_NAME: !Ref S3BucketName,
                       }

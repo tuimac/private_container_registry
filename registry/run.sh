@@ -1,15 +1,15 @@
 #!/bin/bash
 
 #BUCKET_NAME='docker-registry-000'
-#DOMAIN='registry.tuimac.com'
-#S3_REGION='ap-northeast-3'
+#REGISTRY_DOMAIN='registry.tuimac.com'
+#REGION='ap-northeast-3'
 
 function genCert(){
     mkdir -p certs
     openssl req \
         -newkey rsa:4096 -nodes -sha256 -keyout certs/domain.key \
-        -addext "subjectAltName = DNS:"${DOMAIN} \
-        -subj "/C=JP/ST=Osaka/L=Osaka/O=tuimac/OU=tuimac/CN="${DOMAIN} \
+        -addext "subjectAltName = DNS:"${REGISTRY_DOMAIN} \
+        -subj "/C=JP/ST=Osaka/L=Osaka/O=tuimac/OU=tuimac/CN="${REGISTRY_DOMAIN} \
         -x509 -days 3650 -out certs/domain.crt
 }
 
@@ -24,7 +24,7 @@ log:
 loglevel: debug
 storage:
   s3:
-    region: $S3_REGION
+    region: $REGION
     bucket: $BUCKET_NAME
     encrypt: false
     secure: true
@@ -58,10 +58,10 @@ function create_container(){
             -p 443:443 \
             -v $(pwd)/certs:/certs \
             -v $(pwd)/config.yml:/etc/docker/registry/config.yml \
-            -e REGISTRY_STORAGE_S3_REGIONENDPOINT=s3.${S3_REGION}.amazonaws.com \
+            -e REGISTRY_STORAGE_S3_REGIONENDPOINT=s3.${REGION}.amazonaws.com \
             registry
-        sudo mkdir -p /etc/docker/certs.d/$DOMAIN
-        sudo cp certs/domain.crt /etc/docker/certs.d/$DOMAIN/ca.crt
+        sudo mkdir -p /etc/docker/certs.d/$REGISTRY_DOMAIN
+        sudo cp certs/domain.crt /etc/docker/certs.d/$REGISTRY_DOMAIN/ca.crt
     else
         which podman > /dev/null
         if [ $? -eq 0 ]; then
@@ -71,10 +71,10 @@ function create_container(){
                 -p 443:443 \
                 -v $(pwd)/certs:/certs \
                 -v $(pwd)/config.yml:/etc/docker/registry/config.yml \
-                -e REGISTRY_STORAGE_S3_REGIONENDPOINT=s3.${S3_REGION}.amazonaws.com \
+                -e REGISTRY_STORAGE_S3_REGIONENDPOINT=s3.${REGION}.amazonaws.com \
                 registry
-            sudo mkdir -p /etc/containers/certs.d/$DOMAIN
-            sudo cp certs/domain.crt /etc/containers/certs.d/$DOMAIN/ca.crt
+            sudo mkdir -p /etc/containers/certs.d/$REGISTRY_DOMAIN
+            sudo cp certs/domain.crt /etc/containers/certs.d/$REGISTRY_DOMAIN/ca.crt
         else
             echo 'There is no container CLI!!' | logger
             exit 1
