@@ -54,7 +54,7 @@ Parameters:
 
   S3BucketName:
     Type: String
-    Default: tuimac-private-container-registry
+    Default: tuimac-private-registry
 
   SSHPemFilename:
     Type: String
