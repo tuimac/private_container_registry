@@ -18,6 +18,10 @@ Parameters:
     Type: String
     Default: client.tuimac.com
 
+  EfsDomain:
+    Type: String
+    Default: efs.tuimac.com
+
   VpcCidr:
     Type: String
     Default: 10.0.0.0/28
@@ -62,7 +66,13 @@ Parameters:
 
   TagValue:
     Type: String
-    Default: !Ref ${AWS::StackName}
+    Default: private_registry
+
+Conditions:
+  IsDockerCLI:
+    !Equals
+      - !Ref ContainerCLI
+      - podman
 
 Resources:
   # VPC
@@ -322,7 +332,7 @@ Resources:
               raise e
   
   DeleteS3ObjectsResource:
-    Type: Custom::DoSetup
+    Type: Custom::DeleteS3ObjectsResource
     DependsOn: DeleteS3Objects
     Properties:
       ServiceToken: !GetAtt DeleteS3Objects.Arn
@@ -333,216 +343,222 @@ Resources:
     Type: AWS::EC2::SpotFleet
     Properties:
       SpotFleetRequestConfigData:
-      IamFleetRole: !GetAtt SpotFleetInstanceRole.Arn
-      TerminateInstancesWithExpiration: false
-      InstanceInterruptionBehavior: stop
-      TargetCapacity: 1
-      LaunchSpecifications:
-        - BlockDeviceMappings:
-            - DeviceName: /dev/sda1
-              Ebs:
-                DeleteOnTermination: true
-                Encrypted: true
-                Iops: 3000
-                VolumeSize: 10
-                VolumeType: gp3
-          IamInstanceProfile:
-            Arn: !GetAtt EC2InstanceProfile.Arn
-          ImageId:
-            !If
-              - !Equals [!Ref ContainerCLI, podman]
-              - podman
-              - docker
-          InstanceType: t3.small
-          Monitoring:
-            Enabled: false
-          NetworkInterfaces:
-            - AssociatePublicIpAddress: true
-              DeleteOnTermination: true
-              DescriptAion: ContainerCLI Container Resitry Server
-              Groups:
-                - !Ref SecurityGroup
-              SubnetId: !Ref SubnetA
-              DeviceIndex: 0
-              PrivateIpAddresses: 
-                - Primary: true
-                  PrivateIpAddress: !Ref RegistryIP
+        IamFleetRole: !GetAtt SpotFleetInstanceRole.Arn
+        TerminateInstancesWithExpiration: false
+        InstanceInterruptionBehavior: stop
+        TargetCapacity: 1
+        LaunchSpecifications:
+          - BlockDeviceMappings:
+              - DeviceName: /dev/sda1
+                Ebs:
+                  DeleteOnTermination: true
+                  Encrypted: true
+                  Iops: 3000
+                  VolumeSize: 10
+                  VolumeType: gp3
             IamInstanceProfile:
               Arn: !GetAtt EC2InstanceProfile.Arn
-          SpotPrice: 1
-          KeyName: !Ref SSHPemFilename
-          TagSpecifications:
-            - ResourceType: instance
-              Tags:
-                - Key: Name
-                  Value: registry
-          UserData:
-            Fn::Base64:
+            ImageId:
               !If
-                - !Equals [!Ref ContainerCLI, podman]
-                - !Sub
-                  - |
-                    #!/bin/bash
-                    LOG=/var/log/user-data.log
-                    touch $LOG
-                    exec >> $LOG 2>&1
-                        echo '8.4' > /etc/yum/vars/releasever
-                        echo '8.4' > /etc/dnf/vars/releasever
-                        dnf update -y
-                        dnf install -y podman git
-                        echo ${EFSIP}' efs.tuimac.com' >> /etc/hosts
-                        echo ${SERVERIP}' registry.tuimac.com' >> /etc/hosts
-                        echo ${CLIENTIP}' client.tuimac.com' >> /etc/hosts
-                        hostnamectl set-hostname registry.tuimac.com
-                        sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config
-                        cd /home/ec2-user
-                        git clone https://github.com/tuimac/private_container_registry; echo "cloned"
-                        chown ec2-user:ec2-user -R /home/ec2-user/private_container_registry
-                        echo 'efs.tuimac.com:/ /home/ec2-user/efs nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport,_netdev,nofail 0 0' >> /etc/fstab
-                        mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport efs.tuimac.com:/ /home/ec2-user/efs
-                        cd private_container_registry/registry 
-                        sudo -u ec2-user -i './run.sh create'
-                        reboot
-                  - {
-                      SERVERIP: !Ref RegistryIP,
-                      CLIENTIP: !Ref ClientIP,
-                      EFSIP: !Ref EFSIP,
-                      REGISTRY_DOMAIN: !Ref RegistryDomain,
-                      CLIENT_DOMAIN: !Ref ClientDomain,
-                    }
-                - !Sub
-                  - |
-                    #!/bin/bash
-                    LOG=/var/log/user-data.log
-                    touch $LOG
-                    exec >> $LOG 2>&1
-                        yum update -y
-                        yum install -y docker git
-                        echo ${EFSIP}' '${EFS_DOMAIN} >> /etc/hosts
-                        echo ${SERVERIP}' '${REGISTRY_DOMAIN} >> /etc/hosts
-                        echo ${CLIENTIP}' '${CLIENT_DOMAIN} >> /etc/hosts
-                        hostnamectl set-hostname ${REGISTRY_DOMAIN}
-                        systemctl enable docker
-                        systemctl start docker
-                        usermod -aG docker ec2-user
-                        cd /home/ec2-user
-                        git clone https://github.com/tuimac/private_container_registry; echo "cloned"
-                        chown ec2-user:ec2-user -R /home/ec2-user/private_container_registry
-                        cd private_container_registry/registry 
-                        sudo -u ec2-user -i './run.sh create'
-                        reboot
-                  - {
-                      SERVERIP: !Ref RegistryIP,
-                      CLIENTIP: !Ref ClientIP,
-                      EFSIP: !Ref EFSIP,
-                      REGISTRY_DOMAIN: !Ref RegistryDomain,
-                      CLIENT_DOMAIN: !Ref ClientDomain,
-                      EFS_DOMAIN: !Ref EfsDomain,
-                    }
+                - IsDockerCLI
+                - podman
+                - docker
+            InstanceType: t3.small
+            Monitoring:
+              Enabled: false
+            NetworkInterfaces:
+              - AssociatePublicIpAddress: true
+                DeleteOnTermination: true
+                Description: ContainerCLI Container Resitry Server
+                Groups:
+                  - !Ref SecurityGroup
+                SubnetId: !Ref SubnetA
+                DeviceIndex: 0
+                PrivateIpAddresses: 
+                  - Primary: true
+                    PrivateIpAddress: !Ref RegistryIP
+            IamInstanceProfile:
+              Arn: !GetAtt EC2InstanceProfile.Arn
+            SpotPrice: 1
+            KeyName: !Ref SSHPemFilename
+            TagSpecifications:
+              - ResourceType: instance
+                Tags:
+                  - Key: Name
+                    Value: registry
+            UserData:
+              Fn::Base64:
+                !If
+                  - IsDockerCLI
+                  - !Sub
+                    - |
+                      #!/bin/bash
+                      LOG=/var/log/user-data.log
+                      touch $LOG
+                      exec >> $LOG 2>&1
+                          echo '8.4' > /etc/yum/vars/releasever
+                          echo '8.4' > /etc/dnf/vars/releasever
+                          dnf update -y
+                          dnf install -y podman git
+                          echo ${EFSIP}' efs.tuimac.com' >> /etc/hosts
+                          echo ${SERVERIP}' registry.tuimac.com' >> /etc/hosts
+                          echo ${CLIENTIP}' client.tuimac.com' >> /etc/hosts
+                          hostnamectl set-hostname registry.tuimac.com
+                          sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config
+                          cd /home/ec2-user
+                          git clone https://github.com/tuimac/private_container_registry; echo "cloned"
+                          chown ec2-user:ec2-user -R /home/ec2-user/private_container_registry
+                          echo 'efs.tuimac.com:/ /etc/containers/certs.d nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport,_netdev,nofail 0 0' >> /etc/fstab
+                          mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport efs.tuimac.com:/ /etc/containers/certs.d
+                          cd private_container_registry/registry 
+                          sudo -u ec2-user -i './run.sh create'
+                          reboot
+                    - {
+                        SERVERIP: !Ref RegistryIP,
+                        CLIENTIP: !Ref ClientIP,
+                        EFSIP: !Ref EFSIP,
+                        REGISTRY_DOMAIN: !Ref RegistryDomain,
+                        CLIENT_DOMAIN: !Ref ClientDomain,
+                      }
+                  - !Sub
+                    - |
+                      #!/bin/bash
+                      LOG=/var/log/user-data.log
+                      touch $LOG
+                      exec >> $LOG 2>&1
+                          yum update -y
+                          yum install -y docker git
+                          echo ${EFSIP}' '${EFS_DOMAIN} >> /etc/hosts
+                          echo ${SERVERIP}' '${REGISTRY_DOMAIN} >> /etc/hosts
+                          echo ${CLIENTIP}' '${CLIENT_DOMAIN} >> /etc/hosts
+                          hostnamectl set-hostname ${REGISTRY_DOMAIN}
+                          systemctl enable docker
+                          systemctl start docker
+                          usermod -aG docker ec2-user
+                          cd /home/ec2-user
+                          git clone https://github.com/tuimac/private_container_registry; echo "cloned"
+                          chown ec2-user:ec2-user -R /home/ec2-user/private_container_registry
+                          echo 'efs.tuimac.com:/ /etc/docker/certs.d nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport,_netdev,nofail 0 0' >> /etc/fstab
+                          mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport efs.tuimac.com:/ /etc/docker/certs.d
+                          cd private_container_registry/registry 
+                          sudo -u ec2-user -i './run.sh create'
+                          reboot
+                    - {
+                        SERVERIP: !Ref RegistryIP,
+                        CLIENTIP: !Ref ClientIP,
+                        EFSIP: !Ref EFSIP,
+                        REGISTRY_DOMAIN: !Ref RegistryDomain,
+                        CLIENT_DOMAIN: !Ref ClientDomain,
+                        EFS_DOMAIN: !Ref EfsDomain,
+                      }
 
   ClientServer:
     Type: AWS::EC2::SpotFleet
     Properties:
       SpotFleetRequestConfigData:
-      IamFleetRole: !GetAtt SpotFleetInstanceRole.Arn
-      TerminateInstancesWithExpiration: false
-      InstanceInterruptionBehavior: stop
-      TargetCapacity: 1
-      LaunchSpecifications:
-        - BlockDeviceMappings:
-            - DeviceName: /dev/sda1
-              Ebs:
-                DeleteOnTermination: true
-                Encrypted: true
-                Iops: 3000
-                VolumeSize: 10
-                VolumeType: gp3
-          IamInstanceProfile:
-            Arn: !GetAtt EC2InstanceProfile.Arn
-          ImageId:
-            !If
-              - !Equals [!Ref ContainerCLI, podman]
-              - podman
-              - docker
-          InstanceType: t3.small
-          Monitoring:
-            Enabled: false
-          NetworkInterfaces:
-            - AssociatePublicIpAddress: true
-              DeleteOnTermination: true
-              DescriptAion: ContainerCLI Client Server
-              Groups:
-                - !Ref SecurityGroup
-              SubnetId: !Ref SubnetA
-              DeviceIndex: 0
-              PrivateIpAddresses: 
-                - Primary: true
-                  PrivateIpAddress: !Ref ClientIP
+        IamFleetRole: !GetAtt SpotFleetInstanceRole.Arn
+        TerminateInstancesWithExpiration: false
+        InstanceInterruptionBehavior: stop
+        TargetCapacity: 1
+        LaunchSpecifications:
+          - BlockDeviceMappings:
+              - DeviceName: /dev/sda1
+                Ebs:
+                  DeleteOnTermination: true
+                  Encrypted: true
+                  Iops: 3000
+                  VolumeSize: 10
+                  VolumeType: gp3
             IamInstanceProfile:
               Arn: !GetAtt EC2InstanceProfile.Arn
-          SpotPrice: 1
-          KeyName: !Ref SSHPemFilename
-          TagSpecifications:
-            - ResourceType: instance
-              Tags:
-                - Key: Name
-                  Value: client
-          UserData:
-            Fn::Base64:
+            ImageId:
               !If
-                - !Equals [!Ref ContainerCLI, podman]
-                - !Sub
-                  - |
-                    #!/bin/bash
-                    LOG=/var/log/user-data.log
-                    touch $LOG
-                    exec >> $LOG 2>&1
-                        echo '8.4' > /etc/yum/vars/releasever
-                        echo '8.4' > /etc/dnf/vars/releasever
-                        dnf update -y
-                        dnf install -y podman git
-                        echo ${EFSIP}' '${EFS_DOMAIN} >> /etc/hosts
-                        echo ${SERVERIP}' '${REGISTRY_DOMAIN} >> /etc/hosts
-                        echo ${CLIENTIP}' '${CLIENT_DOMAIN} >> /etc/hosts
-                        hostnamectl set-hostname ${CLIENT_DOMAIN}
-                        sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config
-                        cd /home/ec2-user
-                        git clone https://github.com/tuimac/private_container_registry; echo "cloned"
-                        chown ec2-user:ec2-user -R /home/ec2-user/private_container_registry
-                        reboot
-                  - {
-                      SERVERIP: !Ref RegistryIP,
-                      CLIENTIP: !Ref ClientIP,
-                      EFSIP: !Ref EFSIP,
-                      REGISTRY_DOMAIN: !Ref RegistryDomain,
-                      CLIENT_DOMAIN: !Ref ClientDomain,
-                      EFS_DOMAIN: !Ref EfsDomain,
-                    }
-                - !Sub
-                  - |
-                    #!/bin/bash
-                    LOG=/var/log/user-data.log
-                    touch $LOG
-                    exec >> $LOG 2>&1
-                        yum update -y
-                        yum install -y docker git
-                        echo ${EFSIP}' '${EFS_DOMAIN} >> /etc/hosts
-                        echo ${SERVERIP}' '${REGISTRY_DOMAIN} >> /etc/hosts
-                        echo ${CLIENTIP}' '${CLIENT_DOMAIN} >> /etc/hosts
-                        hostnamectl set-hostname registry.tuimac.com
-                        systemctl enable docker
-                        systemctl start docker
-                        usermod -aG docker ec2-user
-                        hostnamectl set-hostname ${CLIENT_DOMAIN}
-                        cd /home/ec2-user
-                        git clone https://github.com/tuimac/private_container_registry; echo "cloned"
-                        chown ec2-user:ec2-user -R /home/ec2-user/private_container_registry
-                        reboot
-                  - {
-                      SERVERIP: !Ref RegistryIP,
-                      CLIENTIP: !Ref ClientIP,
-                      EFSIP: !Ref EFSIP,
-                      REGISTRY_DOMAIN: !Ref RegistryDomain,
-                      CLIENT_DOMAIN: !Ref ClientDomain,
-                      EFS_DOMAIN: !Ref EfsDomain,
-                    }
+                - IsDockerCLI
+                - podman
+                - docker
+            InstanceType: t3.small
+            Monitoring:
+              Enabled: false
+            NetworkInterfaces:
+              - AssociatePublicIpAddress: true
+                DeleteOnTermination: true
+                Description: ContainerCLI Client Server
+                Groups:
+                  - !Ref SecurityGroup
+                SubnetId: !Ref SubnetA
+                DeviceIndex: 0
+                PrivateIpAddresses: 
+                  - Primary: true
+                    PrivateIpAddress: !Ref ClientIP
+            IamInstanceProfile:
+              Arn: !GetAtt EC2InstanceProfile.Arn
+            SpotPrice: 1
+            KeyName: !Ref SSHPemFilename
+            TagSpecifications:
+              - ResourceType: instance
+                Tags:
+                  - Key: Name
+                    Value: client
+            UserData:
+              Fn::Base64:
+                !If
+                  - IsDockerCLI
+                  - !Sub
+                    - |
+                      #!/bin/bash
+                      LOG=/var/log/user-data.log
+                      touch $LOG
+                      exec >> $LOG 2>&1
+                          echo '8.4' > /etc/yum/vars/releasever
+                          echo '8.4' > /etc/dnf/vars/releasever
+                          dnf update -y
+                          dnf install -y podman git
+                          echo ${EFSIP}' '${EFS_DOMAIN} >> /etc/hosts
+                          echo ${SERVERIP}' '${REGISTRY_DOMAIN} >> /etc/hosts
+                          echo ${CLIENTIP}' '${CLIENT_DOMAIN} >> /etc/hosts
+                          hostnamectl set-hostname ${CLIENT_DOMAIN}
+                          sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config
+                          cd /home/ec2-user
+                          git clone https://github.com/tuimac/private_container_registry; echo "cloned"
+                          chown ec2-user:ec2-user -R /home/ec2-user/private_container_registry
+                          echo 'efs.tuimac.com:/ /etc/containers/certs.d nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport,_netdev,nofail 0 0' >> /etc/fstab
+                          mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport efs.tuimac.com:/ /etc/containers/certs.d
+                          reboot
+                    - {
+                        SERVERIP: !Ref RegistryIP,
+                        CLIENTIP: !Ref ClientIP,
+                        EFSIP: !Ref EFSIP,
+                        REGISTRY_DOMAIN: !Ref RegistryDomain,
+                        CLIENT_DOMAIN: !Ref ClientDomain,
+                        EFS_DOMAIN: !Ref EfsDomain,
+                      }
+                  - !Sub
+                    - |
+                      #!/bin/bash
+                      LOG=/var/log/user-data.log
+                      touch $LOG
+                      exec >> $LOG 2>&1
+                          yum update -y
+                          yum install -y docker git
+                          echo ${EFSIP}' '${EFS_DOMAIN} >> /etc/hosts
+                          echo ${SERVERIP}' '${REGISTRY_DOMAIN} >> /etc/hosts
+                          echo ${CLIENTIP}' '${CLIENT_DOMAIN} >> /etc/hosts
+                          hostnamectl set-hostname registry.tuimac.com
+                          systemctl enable docker
+                          systemctl start docker
+                          usermod -aG docker ec2-user
+                          hostnamectl set-hostname ${CLIENT_DOMAIN}
+                          cd /home/ec2-user
+                          git clone https://github.com/tuimac/private_container_registry; echo "cloned"
+                          chown ec2-user:ec2-user -R /home/ec2-user/private_container_registry
+                          echo 'efs.tuimac.com:/ /etc/docker/certs.d nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport,_netdev,nofail 0 0' >> /etc/fstab
+                          mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport efs.tuimac.com:/ /etc/docker/certs.d
+                          reboot
+                    - {
+                        SERVERIP: !Ref RegistryIP,
+                        CLIENTIP: !Ref ClientIP,
+                        EFSIP: !Ref EFSIP,
+                        REGISTRY_DOMAIN: !Ref RegistryDomain,
+                        CLIENT_DOMAIN: !Ref ClientDomain,
+                        EFS_DOMAIN: !Ref EfsDomain,
+                      }
