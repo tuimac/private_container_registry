@@ -399,7 +399,7 @@ Resources:
                           echo '8.4' > /etc/yum/vars/releasever
                           echo '8.4' > /etc/dnf/vars/releasever
                           dnf update -y
-                          dnf install -y podman git
+                          dnf install -y podman git nfs-utils
                           echo ${EFSIP}' efs.tuimac.com' >> /etc/hosts
                           echo ${SERVERIP}' registry.tuimac.com' >> /etc/hosts
                           echo ${CLIENTIP}' client.tuimac.com' >> /etc/hosts
@@ -517,7 +517,7 @@ Resources:
                           echo '8.4' > /etc/yum/vars/releasever
                           echo '8.4' > /etc/dnf/vars/releasever
                           dnf update -y
-                          dnf install -y podman git
+                          dnf install -y podman git nfs-utils
                           echo ${EFSIP}' '${EFS_DOMAIN} >> /etc/hosts
                           echo ${SERVERIP}' '${REGISTRY_DOMAIN} >> /etc/hosts
                           echo ${CLIENTIP}' '${CLIENT_DOMAIN} >> /etc/hosts
