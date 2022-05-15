@@ -361,8 +361,8 @@ Resources:
             ImageId:
               !If
                 - IsDockerCLI
-                - PodmanAMIID
-                - DockerAMIID
+                - !Ref PodmanAMIID
+                - !Ref DockerAMIID
             InstanceType: t3.small
             Monitoring:
               Enabled: false
@@ -475,8 +475,8 @@ Resources:
             ImageId:
               !If
                 - IsDockerCLI
-                - PodmanAMIID
-                - DockerAMIID
+                - !Ref PodmanAMIID
+                - !Ref DockerAMIID
             InstanceType: t3.small
             Monitoring:
               Enabled: false
