@@ -327,7 +327,7 @@ Resources:
                 cfnresponse.send(event, context, cfnresponse.SUCCESS, response)
               else:
                 cfnresponse.send(event, context, cfnresponse.SUCCESS, response)
-           	except ClientError as e:
+            except ClientError as e:
               cfnresponse.send(event, context, cfnresponse.FAILED, response)
               raise e
   
